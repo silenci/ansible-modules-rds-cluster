@@ -238,6 +238,50 @@ def create_cluster(module, client, **params):
 
     module.exit_json(result=result)
 
+def terminate_cluster(module, client, **params):
+
+    try:
+        check_cluster = client.describe_db_clusters(DBClusterIdentifier=params['cluster_id'])
+
+        if 'DBClusters' not in check_cluster or len(check_cluster['DBClusters']) != 1:
+            module.fail_json(msg='Failed to retrieve details for existing cluster')
+
+        # Delete the cluster
+        cluster = check_cluster['DBClusters'][0]
+        result = client.delete_db_cluster(DBClusterIdentifier=params['cluster_id'], SkipFinalSnapshot=True)
+
+        if params['wait_timeout'] == 0:
+            params['wait_timeout'] = 600
+
+    except botocore.exceptions.ClientError as e:
+        module.fail_json(msg=str(e), api_args=api_args)
+
+    if params['wait']:
+        wait_timeout = time.time() + params['wait_timeout']
+        ready = False
+        while not ready and wait_timeout > time.time():
+            try:
+                check_cluster = client.describe_db_clusters(DBClusterIdentifier=params['cluster_id'])
+                if 'DBClusters' in check_cluster and len(check_cluster['DBClusters']) == 1:
+                    if check_cluster['DBClusters'][0]['Status'].lower() == 'deleting':
+                        ready = False
+                else:
+                    ready = True
+
+            except (botocore.exceptions.ClientError, boto.exception.BotoServerError), e:
+                pass
+
+            if not ready:
+                time.sleep(5)
+
+        if wait_timeout <= time.time():
+            if 'DBClusters' in check_cluster and len(check_cluster['DBClusters']) == 1:
+                cluster = check_cluster['DBClusters'][0]
+            else:
+                cluster = None
+            module.fail_json(msg='Timed out trying to delete DB cluster', cluster=cluster)
+
+    module.exit_json(result=result)
 
 def main():
     module_args = dict(
@@ -276,7 +320,7 @@ def main():
     if module.params.get('state') == 'present':
         create_cluster(module=module, client=rds, **args_dict)
     elif module.params.get('state') == 'absent':
-        terminate_cluster(module, rds, **args_dict)
+        terminate_cluster(module=module, client=rds, **args_dict)
 
 # import module snippets
 from ansible.module_utils.basic import *
