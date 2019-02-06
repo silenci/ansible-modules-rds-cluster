@@ -63,6 +63,8 @@ options:
     description:
       - Option group to use for the new cluster
     default: null
+  db_parameter_group:
+      - DB Parameter Group to use for the new Cluster
   state:
     description:
       - "present" to create a cluster (from a snapshot if specified), "absent" to delete a cluster
@@ -145,6 +147,8 @@ def create_cluster(module, client, **params):
         api_args['DatabaseName'] = params['database_name']
     if params['option_group'] is not None:
         api_args['OptionGroupName'] = params['option_group']
+    if params['db_parameter_group'] is not None:
+        api_args['DBClusterParameterGroupName'] = params['db_parameter_group']
     if params['vpc_security_group_ids'] is not None:
         api_args['VpcSecurityGroupIds'] = params['vpc_security_group_ids']
     if params['tags'] is not None:
@@ -245,6 +249,7 @@ def main():
         master_username=dict(required=False),
         master_password=dict(required=False, no_log=True),
         option_group=dict(required=False),
+        db_parameter_group=dict(required=False),
         port=dict(type='int', required=False),
         snapshot_arn=dict(required=False),
         state = dict(required=False, default='present', choices=['present', 'absent']),
